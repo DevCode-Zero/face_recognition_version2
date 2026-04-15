@@ -11,32 +11,47 @@ import cv2
 import numpy as np
 import urllib.request
 import zipfile
+import shutil
 import insightface
 from insightface.app import FaceAnalysis
 from config import INSIGHTFACE_MODEL, DET_SIZE, CTX_ID
 
 
 MODEL_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
-MODEL_DIR = os.path.expanduser("~/.insightface/models/buffalo_l")
 
 
 def _ensure_models():
     """Download models if not present."""
-    if os.path.isdir(MODEL_DIR) and os.listdir(MODEL_DIR):
-        return  # Already downloaded
+    # Use home dir or temp dir (works on Render)
+    base_dir = os.path.expanduser("~/.insightface")
+    if not os.path.exists(base_dir):
+        base_dir = "/tmp/.insightface"
     
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    zip_path = os.path.join(MODEL_DIR, "..", "buffalo_l.zip")
+    model_dir = os.path.join(base_dir, "models", "buffalo_l")
+    os.makedirs(model_dir, exist_ok=True)
     
-    print(f"[FaceEngine] Downloading models...")
+    # Check if models exist
+    onnx_files = [f for f in os.listdir(model_dir) if f.endswith('.onnx')]
+    if len(onnx_files) >= 5:
+        os.environ["INSIGHTFACE_MODEL_ROOT"] = os.path.join(base_dir, "models")
+        return
+    
+    # Download
+    zip_path = os.path.join(base_dir, "buffalo_l.zip")
+    print(f"[FaceEngine] Downloading InsightFace models to {model_dir}...")
+    
     try:
+        # Download with progress
         urllib.request.urlretrieve(MODEL_URL, zip_path)
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(os.path.join(MODEL_DIR, ".."))
+            zf.extractall(os.path.join(base_dir, "models"))
         os.remove(zip_path)
         print(f"[FaceEngine] Models downloaded.")
     except Exception as e:
         print(f"[FaceEngine] Download failed: {e}")
+        # Clean up partial download
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
         raise
 
 
